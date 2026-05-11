@@ -3,7 +3,18 @@ import { motion, AnimatePresence } from "motion/react";
 import { MessageSquare, Send, X, Bot, Sparkles, Loader2 } from "lucide-react";
 import { GoogleGenAI } from "@google/genai";
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+let aiInstance: GoogleGenAI | null = null;
+
+function getAI(): GoogleGenAI {
+  if (!aiInstance) {
+    const key = process.env.GEMINI_API_KEY;
+    if (!key || key === "MY_GEMINI_API_KEY") {
+      throw new Error("GEMINI_API_KEY is required. Please set it in the Secrets panel.");
+    }
+    aiInstance = new GoogleGenAI({ apiKey: key });
+  }
+  return aiInstance;
+}
 
 interface Message {
   role: "user" | "bot";
@@ -37,6 +48,7 @@ export default function AIAssistant() {
     setIsLoading(true);
 
     try {
+      const ai = getAI();
       const response = await ai.models.generateContent({
         model: "gemini-3-flash-preview",
         contents: userMessage,
@@ -49,7 +61,10 @@ export default function AIAssistant() {
       setMessages((prev) => [...prev, { role: "bot", content: botMessage }]);
     } catch (error) {
       console.error("AI Assistant Error:", error);
-      setMessages((prev) => [...prev, { role: "bot", content: "Communication line disrupted. Re-calibrate and try again." }]);
+      const errorMessage = error instanceof Error && error.message.includes("GEMINI_API_KEY") 
+        ? "AI training data offline. (API Key missing in Secrets)" 
+        : "Communication line disrupted. Re-calibrate and try again.";
+      setMessages((prev) => [...prev, { role: "bot", content: errorMessage }]);
     } finally {
       setIsLoading(false);
     }
